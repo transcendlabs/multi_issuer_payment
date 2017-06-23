@@ -89,6 +89,7 @@ func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numToke
 		
 		
 			user_account.Balance += numTokens_uint64
+			fmt.Println("Account = ",userAddress, "Balance = ", user_account.Balance)
 		
 		
 			buf := wire.BinaryBytes(user_account)   //encoded to []byte
@@ -96,6 +97,7 @@ func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numToke
 		}else{
 			user_account := &SmartCardUser{Balance:0}
 			user_account.Balance = numTokens_uint64
+			fmt.Println("Account  = " ,userAddress, "Balance = ", user_account.Balance)
 		
 			buf := wire.BinaryBytes(user_account) //encoded to []byte
 			app.user_accounts.Set([]byte(userAddress),buf)
@@ -203,8 +205,5 @@ func readPrivateKey()*ecdsa.PrivateKey{
 	privateKey, _ := x509.ParseECPrivateKey(x509Encoded)
 	return privateKey
 }
-
-
-
 
 
