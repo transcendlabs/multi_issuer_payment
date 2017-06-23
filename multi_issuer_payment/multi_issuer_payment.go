@@ -30,11 +30,16 @@ func NewMultiIssuerPaymentApplication() *MultiIssuerPaymentApplication {
 }
 
 
-//TODO work on signature
+	
 //func issueTokens(issuerAddress, userAddress, numTokens, signature){
-func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numTokens uint64){
+func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numTokens string,sequence string,signture){
+
+	verified := VerifySignature(userAddress, numTokens, sequence)
 	
 	exists, user_account_bytes := accountDetails(app, userAddress)
+	
+	numTokens_uint64,_ := strconv.ParseUint(numTokens, 10, 64)
+	
 	
 	if exists{
 		user_account := &SmartCardUser{}
@@ -44,14 +49,14 @@ func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numToke
 		//used ReadBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
 		
 		
-		user_account.Balance += numTokens
+		user_account.Balance += numTokens_uint64
 		
 		
 		buf := wire.BinaryBytes(user_account)   //encoded to []byte
 		app.user_accounts.Set([]byte(userAddress),buf)
 	}else{
 		user_account := &SmartCardUser{Balance:0}
-		user_account.Balance = numTokens
+		user_account.Balance = numTokens_uint64
 		
 		buf := wire.BinaryBytes(user_account) //encoded to []byte
 		app.user_accounts.Set([]byte(userAddress),buf)
@@ -74,8 +79,12 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 
 	parts := strings.Split(string(tx), "=")
 	if len(parts) == 2 {
-		u,_ := strconv.ParseUint(parts[1], 10, 64)
-		issueTokens(app, string(parts[0]), u)
+		userAddress := string(parts[0])
+		numTokens := parts[1]
+		//numTokens,_ := strconv.ParseUint(parts[1], 10, 64)
+		signature := GetSignatureIssueToken(userAddress,numTokens , "1")
+		//TODO change "1" to sequence variable
+		issueTokens(app, userAddress, numTokens, signature)
 	} else {
 		return types.ErrEncodingError.SetLog(cmn.Fmt("Not valid format, format should be of form 'account=tokens'")) 
 	}
@@ -89,6 +98,69 @@ func ReadBinaryBytes(d []byte, ptr interface{}) error {
 	wire.ReadBinary(ptr, r, len(d), n, err)
 	return *err
 }
+
+func GetSignatureIssueToken(userAddress string, numTokens string, sequence string)[]uint8{
+	private_key := readPrivateKey()
+	
+	data := map[string]string{
+		"func": "issueTokens",
+		"userAddress": userAddress,
+		"numTokens": numTokens,
+		"sequence": sequence,
+	}
+	json_data, err := json.Marshal(data)	
+	
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	
+	r, s, err := ecdsa.Sign(rand.Reader, private_key, []byte(sha1_hash))
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	signature := r.Bytes()
+ 	signature = append(signature, s.Bytes()...)
+ 	
+ 	return signature
+}
+
+
+func VerifySignature(userAddress string, numTokens uint64, sequence string, signature []uint8)bool{
+	public_key := readPublicKey()
+	
+	
+	numTokens_string :=strconv.FormatUint(numTokens, 10)
+	data := map[string]string{
+		"func": "issueTokens",
+		"userAddress": userAddress,
+		"numTokens": numTokens_string,
+		"sequence": sequence,
+	}
+	
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	
+	
+	r := new(big.Int)
+	r.SetBytes(signature[0:32])
+	s := new(big.Int)
+	s.SetBytes(signature[32:64])
+	
+	verifyStatus := ecdsa.Verify(public_key, []byte(sha1_hash), r, s)
+	
+	return verifyStatus
+}
+
+
 
 
 
