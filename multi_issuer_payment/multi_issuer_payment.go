@@ -37,6 +37,7 @@ import (
 type MultiIssuerPaymentApplication struct {
 	types.BaseApplication
 	user_accounts merkle.Tree
+	sequence uint64
 }
 
 func NewMultiIssuerPaymentApplication() *MultiIssuerPaymentApplication {
@@ -57,10 +58,12 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 	if len(parts) == 2 {
 		userAddress := string(parts[0])
 		numTokens := parts[1]
-		//numTokens,_ := strconv.ParseUint(parts[1], 10, 64)
-		signature := GetSignatureIssueToken(userAddress,numTokens , "1")
+		app.sequence += 1
+		sequence_str := strconv.FormatUint(app.sequence, 10)
+		fmt.Println("sequence = ",sequence_str)
+		signature := GetSignatureIssueToken(userAddress,numTokens , sequence_str)
 		//TODO change "1" to sequence variable
-		issueTokens(app, userAddress, numTokens,"1", signature)
+		issueTokens(app, userAddress, numTokens,sequence_str, signature)
 	} else {
 		return types.ErrEncodingError.SetLog(cmn.Fmt("Not valid format, format should be of form 'account=tokens'")) 
 	}
@@ -77,7 +80,7 @@ func issueTokens(app *MultiIssuerPaymentApplication, userAddress string, numToke
 	
 		exists, user_account_bytes := accountDetails(app, userAddress)
 	
-		numTokens_uint64,_ := strconv.ParseUint(numTokens, 10, 64)
+		numTokens_uint64, _ := strconv.ParseUint(numTokens, 10, 64)
 	
 	
 		if exists{
