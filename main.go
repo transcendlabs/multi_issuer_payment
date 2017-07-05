@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/ror-shubham/multi_issuer_payment/multi_issuer_payment"
+	"github.com/ror-shubham/fork_multi_issuer_payment/multi_issuer_payment/multi_issuer_payment"
 	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/tmlibs/common"

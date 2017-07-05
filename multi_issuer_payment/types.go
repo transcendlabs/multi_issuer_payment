@@ -3,7 +3,10 @@ package multi_issuer_payment
 import(
 	"github.com/tendermint/go-crypto"
 	"github.com/gods/maps/treemap"
+	"github.com/tendermint/tmlibs/merkle"
 )
+
+var IssuerBalance map[SmartCardIssuer]uint64
 
 type SmartCardIssuer struct {
 	PublicKey crypto.PubKey
@@ -40,8 +43,11 @@ type SmartCardProcessor struct {
 	MinSequence uint32
 	SeenSequence *treemap.Map
 	MaxSeenSequence uint32
-	//Balance []IssuerBalance
+	Balance []IssuerBalance
 }
+
+
+
 /*I thought of storing all SeenSequences
 But it is not necessary for the time being
 Let's go with one last_seen_sequence
