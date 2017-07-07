@@ -18,6 +18,12 @@ import (
 
 func main(){
 
+	//issue()
+	transact()
+	
+}
+
+func issue(){
 	fmt.Print("Enter UserAddress: ")
 	var userAddress string
 	fmt.Scanln(&userAddress)
@@ -51,7 +57,46 @@ func main(){
 	fmt.Println(url)
 	
 	fmt.Println(string(body))
+}
+
+func transact(){
+	fmt.Print("Enter fromAddress: ")
+	var fromAddress string
+	fmt.Scanln(&fromAddress)
 	
+	fmt.Print("Enter toAddress: ")
+	var toAddress string
+	fmt.Scanln(&toAddress)
+
+	fmt.Print("Enter numTokens: ")
+	var numTokens string
+	fmt.Scanln(&numTokens)
+
+	fmt.Print("Enter sequence: ")
+	var sequence string
+	fmt.Scanln(&sequence)
+
+	sign := GetSignatureTransact(fromAddress, toAddress, numTokens, sequence)
+	
+	url := "http://localhost:46657/broadcast_tx_commit?tx=\"transact," + fromAddress + ","+ toAddress + "," + numTokens + "," + sign + "," + sequence+"\""
+	
+	resp, err := http.Get(url)	
+	if err != nil {
+		fmt.Println("error")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	
+	fmt.Println(url)
+	
+	fmt.Println(string(body))
 }
 
 func GetSignatureIssueToken(userAddress string, numTokens string, sequence string)string{
@@ -60,6 +105,39 @@ func GetSignatureIssueToken(userAddress string, numTokens string, sequence strin
 	data := map[string]string{
 		"func": "issueTokens",
 		"userAddress": userAddress,
+		"numTokens": numTokens,
+		"sequence": sequence,
+	}
+	json_data, err := json.Marshal(data)
+
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+
+	r, s, err := ecdsa.Sign(rand.Reader, private_key, []byte(sha1_hash))
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	signature := r.Bytes()
+	signature = append(signature, s.Bytes()...)
+	
+	signatureBigInt := new(big.Int)
+	signatureBigInt.SetBytes(signature)
+	
+	signatureString := signatureBigInt.String()
+
+	return signatureString
+}
+
+func GetSignatureTransact(fromAddress string, toAddress string, numTokens string, sequence string)string{
+	private_key := readPrivateKey()
+
+	data := map[string]string{
+		"func": "transact",
+		"fromAddress": fromAddress,
+		"toAddress": toAddress,
 		"numTokens": numTokens,
 		"sequence": sequence,
 	}

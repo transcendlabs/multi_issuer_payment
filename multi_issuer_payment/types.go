@@ -3,10 +3,8 @@ package multi_issuer_payment
 import(
 	"github.com/tendermint/go-crypto"
 	"github.com/gods/maps/treemap"
-	"github.com/tendermint/tmlibs/merkle"
 )
 
-var IssuerBalance map[SmartCardIssuer]uint64
 
 type SmartCardIssuer struct {
 	PublicKey crypto.PubKey
@@ -44,8 +42,14 @@ type SmartCardProcessor struct {
 	SeenSequence *treemap.Map
 	MaxSeenSequence uint32
 	Balance []IssuerBalance
+	//struct array used(and not map) because go-wire (used to encode data structure to bytes) doesn't support maps and recommend this way
 }
 
+
+type IssuerBalance struct {
+	Issuer *SmartCardIssuer
+	Balance uint64
+}
 
 
 /*I thought of storing all SeenSequences
