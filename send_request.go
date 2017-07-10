@@ -16,12 +16,13 @@ import (
 	
 )
 
-func main(){
+/*func main(){
 
 	//issue()
 	transact()
 	
 }
+*/
 
 func issue(){
 	fmt.Print("Enter UserAddress: ")
@@ -93,7 +94,7 @@ func transact(){
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	
+	 
 	fmt.Println(url)
 	
 	fmt.Println(string(body))
