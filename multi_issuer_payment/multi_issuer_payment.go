@@ -19,7 +19,8 @@ type MultiIssuerPaymentApplication struct {
 
 func NewMultiIssuerPaymentApplication() *MultiIssuerPaymentApplication {
 	userAccounts := iavl.NewIAVLTree(0, nil)
-	return &MultiIssuerPaymentApplication{userAccounts: userAccounts}
+	processorAccounts := iavl.NewIAVLTree(0, nil)
+	return &MultiIssuerPaymentApplication{userAccounts: userAccounts, processorAccounts: processorAccounts}
 }
 
 func (app *MultiIssuerPaymentApplication) CheckTx(tx []byte) types.Result {
@@ -44,7 +45,7 @@ func (app *MultiIssuerPaymentApplication) CheckTx(tx []byte) types.Result {
 			}
 
 			userAccount := &SmartCardUser{}
-			_, userAccountBytes := accountDetails(app, userAddress)
+			_, userAccountBytes := userAccountDetails(app, userAddress)
 			readBinaryBytes(userAccountBytes, userAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
@@ -72,7 +73,7 @@ func (app *MultiIssuerPaymentApplication) CheckTx(tx []byte) types.Result {
 			sequenceUint := uint32(sequenceUint64)
 
 			userAccount := &SmartCardUser{}
-			_, userAccountBytes := accountDetails(app, fromAddress)
+			_, userAccountBytes := userAccountDetails(app, fromAddress)
 			readBinaryBytes(userAccountBytes, userAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
@@ -108,7 +109,7 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 			sequenceUint := uint32(sequenceUint64)
 
 			userAccount := &SmartCardUser{}
-			_, userAccountBytes := accountDetails(app, userAddress)
+			_, userAccountBytes := userAccountDetails(app, userAddress)
 			readBinaryBytes(userAccountBytes, userAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
@@ -127,7 +128,7 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 
 			userAccount = &SmartCardUser{}
 			//couldn't use from above as userAccount is modified in issueTokens
-			_, userAccountBytes = accountDetails(app, userAddress)
+			_, userAccountBytes = userAccountDetails(app, userAddress)
 			readBinaryBytes(userAccountBytes, userAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
@@ -154,7 +155,7 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 			sequenceUint := uint32(sequenceUint64)
 
 			fromAccount := &SmartCardUser{}
-			_, fromAccountBytes := accountDetails(app, fromAddress)
+			_, fromAccountBytes := userAccountDetails(app, fromAddress)
 			readBinaryBytes(fromAccountBytes, fromAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
@@ -177,7 +178,7 @@ func (app *MultiIssuerPaymentApplication) DeliverTx(tx []byte) types.Result {
 
 			fromAccount = &SmartCardUser{}
 			//couldn't use from above as userAccount is modified in issueTokens
-			_, fromAccountBytes = accountDetails(app, fromAddress)
+			_, fromAccountBytes = userAccountDetails(app, fromAddress)
 			readBinaryBytes(fromAccountBytes, fromAccount)
 			//decoded user_account_bytes to user_account(of type SmartCardUser)
 			//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes

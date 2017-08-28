@@ -1,22 +1,19 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/sha1"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/tendermint/go-crypto"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"os"
 )
 
 func main() {
-	//issue()
+	issue()
 	transact()
 
 }
@@ -38,6 +35,7 @@ func issue() {
 
 	url := "http://localhost:46657/broadcast_tx_commit?tx=\"issueTokens," +
 		"" + userAddress + "," + numTokens + "," + sequence + "," + sign + "\""
+	fmt.Println(url)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -52,8 +50,6 @@ func issue() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	fmt.Println(url)
 
 	fmt.Println(string(body))
 }
@@ -78,7 +74,7 @@ func transact() {
 	sign := GetSignatureTransactToken(fromAddress, toAddress, numTokens, sequence)
 
 	url := "http://localhost:46657/broadcast_tx_commit?tx=\"transact," + fromAddress + "," +
-		"" + toAddress + "," + numTokens + "," + sequence + "," + sign + "\""
+		"" + toAddress + "," + numTokens + "," + sequence + "," + string(sign) + "\""
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -110,26 +106,24 @@ func GetSignatureIssueToken(userAddress string, numTokens string, sequence strin
 		"sequence":    sequence,
 	}
 	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("error in GetSignatureIssueToken- json.Marshal")
+		os.Exit(1)
+	}
 
 	h := sha1.New()
 	h.Write(json_data)
 	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	sha1_hash_byte := []byte(sha1_hash)
 
-	r, s, err := ecdsa.Sign(rand.Reader, private_key, []byte(sha1_hash))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	sign := private_key.Sign(sha1_hash_byte)
+	sign_bytes := sign.Bytes()
 
-	signature := r.Bytes()
-	signature = append(signature, s.Bytes()...)
+	sign_base64 := hex.EncodeToString(sign_bytes)
 
-	signatureBigInt := new(big.Int)
-	signatureBigInt.SetBytes(signature)
+	return sign_base64
 
-	signatureString := signatureBigInt.String()
-
-	return signatureString
 }
 
 func GetSignatureTransactToken(fromAddress string, toAddress string, numTokens string, sequence string) string {
@@ -143,32 +137,29 @@ func GetSignatureTransactToken(fromAddress string, toAddress string, numTokens s
 		"sequence":    sequence,
 	}
 	json_data, err := json.Marshal(data)
-
-	h := sha1.New()
-	h.Write(json_data)
-	sha1_hash := hex.EncodeToString(h.Sum(nil))
-
-	r, s, err := ecdsa.Sign(rand.Reader, private_key, []byte(sha1_hash))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	signature := r.Bytes()
-	signature = append(signature, s.Bytes()...)
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	sha1_hash_byte := []byte(sha1_hash)
 
-	signatureBigInt := new(big.Int)
-	signatureBigInt.SetBytes(signature)
+	sign := private_key.Sign(sha1_hash_byte)
+	sign_bytes := sign.Bytes()
 
-	signatureString := signatureBigInt.String()
+	sign_base64 := hex.EncodeToString(sign_bytes)
 
-	return signatureString
+	return sign_base64
 }
 
-func readPrivateKey() *ecdsa.PrivateKey {
+func readPrivateKey() *crypto.PrivKeyEd25519 {
 	keyEncoded, _ := ioutil.ReadFile("key")
+	key := new(crypto.PrivKeyEd25519)
 	block, _ := pem.Decode(keyEncoded)
-	x509Encoded := block.Bytes
-	privateKey, _ := x509.ParseECPrivateKey(x509Encoded)
-	return privateKey
+	encodedPrivate := block.Bytes
+	key.UnmarshalJSON(encodedPrivate)
+	return key
 }

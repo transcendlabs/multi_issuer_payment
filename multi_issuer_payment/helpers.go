@@ -5,14 +5,16 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha1"
 	"crypto/x509"
+	//"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/tendermint/go-crypto"
 	wire "github.com/tendermint/go-wire"
 	"io/ioutil"
-	"math/big"
 	"os"
+	//"reflect"
 	"strconv"
 )
 
@@ -23,24 +25,40 @@ func issueTokens(app *MultiIssuerPaymentApplication,
 	sequence string,
 	signature string,
 ) {
-	exists, userAccountBytes := accountDetails(app, userAddress)
+	exists, userAccountBytes := userAccountDetails(app, userAddress)
 	numTokensUint64, _ := strconv.ParseUint(numTokens, 10, 64)
 
 	if exists {
-		userAccount := &SmartCardUser{}
-		readBinaryBytes(userAccountBytes, userAccount)
+		pubKey := *readPublicKeyTypeCrypto()
+		issuer := &SmartCardIssuer{PublicKey: pubKey}
+
+		userAccount := &SmartCardUser{Issuer: issuer}
+		//added issuer to SmartCardUser
+		//later it needs to be modified(Issuer should be set only once I think)
+		err := readBinaryBytes(userAccountBytes, userAccount)
+		if err != nil {
+			fmt.Println("err in helpers.issue.if.readBinaryBytes")
+			fmt.Println(err)
+			os.Exit(1)
+		}
 		//decoded user_account_bytes to user_account(of type SmartCardUser)
 		//used ReadBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
 
 		userAccount.Balance += numTokensUint64
-		fmt.Println("Account = ", userAddress, "Balance = ", userAccount.Balance)
+		fmt.Println("Account = ", userAddress, "Balance = ", userAccount.Balance, "User = ", userAccount)
 
 		buf := wire.BinaryBytes(userAccount) //encoded to []byte
 		app.userAccounts.Set([]byte(userAddress), buf)
 	} else {
-		userAccount := &SmartCardUser{Balance: 0}
+		pubKey := *readPublicKeyTypeCrypto()
+		issuer := &SmartCardIssuer{PublicKey: pubKey}
+
+		userAccount := &SmartCardUser{Balance: 0, Issuer: issuer}
+		//added issuer to SmartCardUser
+		//later it needs to be modified(Issuer should be set only once I think)
+
 		userAccount.Balance = numTokensUint64
-		fmt.Println("Account  = ", userAddress, "Balance = ", userAccount.Balance)
+		fmt.Println("Account  = ", userAddress, "Balance = ", userAccount.Balance, "User = ", userAccount)
 
 		buf := wire.BinaryBytes(userAccount) //encoded to []byte
 		app.userAccounts.Set([]byte(userAddress), buf)
@@ -48,64 +66,127 @@ func issueTokens(app *MultiIssuerPaymentApplication,
 }
 
 func transact(app *MultiIssuerPaymentApplication,
-	fromAddress string,
-	toAddress string,
+	userAddress string,
+	processorAddress string,
 	numTokens string,
 	sequence string,
 	signature string,
 ) {
-	exists_from, fromAccountBytes := accountDetails(app, fromAddress)
-	exists_to, toAccountBytes := accountDetails(app, toAddress)
+	exists_user, userAccountBytes := userAccountDetails(app, userAddress)
+	exists_processor, processorAccountBytes := processorAccountDetails(app, processorAddress)
 	numTokensUint64, _ := strconv.ParseUint(numTokens, 10, 64)
-	if exists_to && exists_from {
-		fromAccount := &SmartCardUser{}
-		toAccount := &SmartCardUser{}
+	if exists_processor && exists_user {
+		userAccount := &SmartCardUser{}
+		processorAccount := &SmartCardProcessor{}
 
-		readBinaryBytes(fromAccountBytes, fromAccount)
-		readBinaryBytes(toAccountBytes, toAccount)
+		err := readBinaryBytes(userAccountBytes, userAccount)
+		err = readBinaryBytes(processorAccountBytes, processorAccount)
+		if err != nil {
+			fmt.Println("err in helpers.transact.if.readBinaryBytes")
+			fmt.Println(err)
+			os.Exit(1)
+		}
 		//decoded user_account_bytes to user_account(of type SmartCardUser)
 		//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
-		fmt.Println("balance = ", fromAccount.Balance)
-		toAccount.Balance += numTokensUint64
-		fromAccount.Balance -= numTokensUint64
-		fmt.Println("Account = ", fromAddress, "Balance = ", fromAccount.Balance)
-		fmt.Println("balance = ", fromAccount.Balance)
-		fmt.Println("Account = ", toAddress, "Balance = ", toAccount.Balance)
 
-		buf_from := wire.BinaryBytes(fromAccount) //encoded to []byte
-		app.userAccounts.Set([]byte(fromAddress), buf_from)
-		buf_to := wire.BinaryBytes(toAccount) //encoded to []byte
-		app.userAccounts.Set([]byte(toAddress), buf_to)
+		//to find balance for given issuer by searching in struct array and adding balance to it
+		issuerExists := false
 
-	} else if exists_from {
-		fromAccount := &SmartCardUser{}
-		toAccount := &SmartCardUser{Balance: 0}
+		issuer := userAccount.Issuer
+		for i, balance := range processorAccount.Balances {
+			if *(balance.Issuer) == *issuer {
+				processorAccount.Balances[i].Balance += numTokensUint64
+				issuerExists = true
+			}
+		}
+		if !issuerExists {
+			//add issuer in processor account if not exist
+			processorAccount.Balances = append(processorAccount.Balances, IssuerBalance{Issuer: issuer, Balance: numTokensUint64})
+		}
 
-		readBinaryBytes(fromAccountBytes, fromAccount)
+		userAccount.Balance -= numTokensUint64
+		fmt.Println("Account = ", userAddress, "Balance = ", userAccount.Balance, "User = ", userAccount)
+		fmt.Println("Account = ", processorAddress, "Balances = ", processorAccount.Balances, "User = ", processorAccount)
 
-		fmt.Println("balance = ", fromAccount.Balance)
-		toAccount.Balance += numTokensUint64
-		fromAccount.Balance -= numTokensUint64
-		fmt.Println("Account = ", fromAddress, "Balance = ", fromAccount.Balance)
-		fmt.Println("balance = ", fromAccount.Balance)
-		fmt.Println("Account = ", toAddress, "Balance = ", toAccount.Balance)
+		buf_from := wire.BinaryBytes(userAccount) //encoded to []byte
+		app.userAccounts.Set([]byte(userAddress), buf_from)
+		buf_to := wire.BinaryBytes(processorAccount) //encoded to []byte
+		app.processorAccounts.Set([]byte(processorAddress), buf_to)
 
-		buf_from := wire.BinaryBytes(fromAccount) //encoded to []byte
-		app.userAccounts.Set([]byte(fromAddress), buf_from)
-		buf_to := wire.BinaryBytes(fromAccount) //encoded to []byte
-		app.userAccounts.Set([]byte(toAddress), buf_to)
+	} else if exists_user {
+		makeDummyProcessor(app, processorAddress)
+		_, processorAccountBytes = processorAccountDetails(app, processorAddress)
+		userAccount := &SmartCardUser{}
+
+		processorAccount := &SmartCardProcessor{}
+
+		err := readBinaryBytes(processorAccountBytes, processorAccount)
+		err = readBinaryBytes(userAccountBytes, userAccount)
+		if err != nil {
+			fmt.Println("err in helpers.transact.else if.readBinaryBytes")
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		//to find balance for given issuer by searching in struct array and adding balance to it
+		issuerExists := false
+
+		issuer := userAccount.Issuer
+		for i, balance := range processorAccount.Balances {
+			if *(balance.Issuer) == *issuer {
+				processorAccount.Balances[i].Balance += numTokensUint64
+				issuerExists = true
+			}
+		}
+		if !issuerExists {
+			//add issuer in processor account if not exist
+			processorAccount.Balances = append(processorAccount.Balances,
+				IssuerBalance{Issuer: issuer, Balance: numTokensUint64})
+		}
+
+		userAccount.Balance -= numTokensUint64
+		fmt.Println("Account = ", userAddress, "Balance = ", userAccount.Balance, "User = ", userAccount)
+		fmt.Println("Account = ", processorAddress, "Balances = ", processorAccount.Balances, "User = ", processorAccount)
+
+		buf_from := wire.BinaryBytes(userAccount) //encoded to []byte
+		app.userAccounts.Set([]byte(userAddress), buf_from)
+		buf_to := wire.BinaryBytes(processorAccount) //encoded to []byte
+		app.processorAccounts.Set([]byte(processorAddress), buf_to)
 	} else {
 		//TODO error it out
 		fmt.Println("account doesn't exist")
 	}
 }
 
+//TODO remove it later
+func makeDummyProcessor(app *MultiIssuerPaymentApplication, processorAddress string) {
+	pubKey := *readPublicKeyTypeCrypto()
+	processorAccount := &SmartCardProcessor{PublicKey: pubKey}
+
+	buf := wire.BinaryBytes(processorAccount) //encoded to []byte
+	processorAccount2 := &SmartCardProcessor{}
+	err := readBinaryBytes(buf, processorAccount2)
+	if err != nil {
+		fmt.Println("err in helpers.makeDummyProcessor.readBinaryBytes")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	app.processorAccounts.Set([]byte(processorAddress), buf)
+
+}
+
 func hasSufficientBalance(app *MultiIssuerPaymentApplication, userAddress string, numTokens string) bool {
-	exists, userAccountBytes := accountDetails(app, userAddress)
+	exists, userAccountBytes := userAccountDetails(app, userAddress)
 	numTokensUint64, _ := strconv.ParseUint(numTokens, 10, 64)
 	if exists {
 		userAccount := &SmartCardUser{}
-		readBinaryBytes(userAccountBytes, userAccount)
+		err := readBinaryBytes(userAccountBytes, userAccount)
+
+		if err != nil {
+			fmt.Println("err in helpers.hasSufficientBalance.readBinaryBytes")
+			fmt.Println(err)
+			os.Exit(1)
+		}
 		//decoded user_account_bytes to user_account(of type SmartCardUser)
 		//used readBinaryBytes(locally implemented) and not wire.ReadBinaryBytes
 
@@ -116,96 +197,91 @@ func hasSufficientBalance(app *MultiIssuerPaymentApplication, userAddress string
 	return false
 }
 
-func accountDetails(app *MultiIssuerPaymentApplication, userAddress string) (bool, []byte) {
+func userAccountDetails(app *MultiIssuerPaymentApplication, userAddress string) (bool, []byte) {
 	_, userAccounts, exists := app.userAccounts.Get([]byte(userAddress))
 	return exists, userAccounts
 }
 
+func processorAccountDetails(app *MultiIssuerPaymentApplication, processorAddress string) (bool, []byte) {
+	_, processorAccounts, exists := app.processorAccounts.Get([]byte(processorAddress))
+	return exists, processorAccounts
+}
+
 func readBinaryBytes(d []byte, ptr interface{}) error {
 	//somehow function implemented in util.go in package go-wire was giving weird results so implemented here.
-	//Only difference is use of ReadBinary() in place of ReadBinaryPtr
+	//Only difference is use of ReadBinary() in place of ReadBinaryPtr()
 	r, n, err := bytes.NewBuffer(d), new(int), new(error)
 	wire.ReadBinary(ptr, r, len(d), n, err)
 	return *err
 }
 
 func verifySignatureIssue(userAddress string, numTokens string, sequence string, signature string) bool {
-	public_key := readPublicKey()
+	public_key := readPublicKeyTypeCrypto()
 
-	signBigInt := new(big.Int)
-	signBigInt.SetString(signature, 10)
-	signBytes := signBigInt.Bytes()
-
-	if len(signBytes) != 64 {
-		return false
-	} else {
-
-		data := map[string]string{
-			"func":        "issueTokens",
-			"userAddress": userAddress,
-			"numTokens":   numTokens,
-			"sequence":    sequence,
-		}
-
-		json_data, err := json.Marshal(data)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		h := sha1.New()
-		h.Write(json_data)
-		sha1_hash := hex.EncodeToString(h.Sum(nil))
-
-		r := new(big.Int)
-		r.SetBytes(signBytes[0:32])
-		s := new(big.Int)
-		s.SetBytes(signBytes[32:64])
-
-		verifyStatus := ecdsa.Verify(public_key, []byte(sha1_hash), r, s)
-
-		return verifyStatus
+	signature_bytes, err := hex.DecodeString(signature)
+	if err != nil {
+		fmt.Println("err in helpers.verifySignatureIssue.signature_bytes")
+		fmt.Println(err)
+		os.Exit(1)
 	}
+
+	signature_final, err := crypto.SignatureFromBytes(signature_bytes)
+
+	data := map[string]string{
+		"func":        "issueTokens",
+		"userAddress": userAddress,
+		"numTokens":   numTokens,
+		"sequence":    sequence,
+	}
+
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	sha1_hash_bytes := []byte(sha1_hash)
+	verifyStatus := public_key.VerifyBytes(sha1_hash_bytes, signature_final)
+
+	return verifyStatus
 }
 
 func verifySignatureTransact(fromAddress string, toAddress string, numTokens string, sequence string, signature string) bool {
-	public_key := readPublicKey()
-
-	signBigInt := new(big.Int)
-	signBigInt.SetString(signature, 10)
-	signBytes := signBigInt.Bytes()
-
-	if len(signBytes) != 64 {
-		return false
-	} else {
-
-		data := map[string]string{
-			"func":        "transact",
-			"fromAddress": fromAddress,
-			"toAddress":   toAddress,
-			"numTokens":   numTokens,
-			"sequence":    sequence,
-		}
-
-		json_data, err := json.Marshal(data)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		h := sha1.New()
-		h.Write(json_data)
-		sha1_hash := hex.EncodeToString(h.Sum(nil))
-
-		r := new(big.Int)
-		r.SetBytes(signBytes[0:32])
-		s := new(big.Int)
-		s.SetBytes(signBytes[32:64])
-
-		verifyStatus := ecdsa.Verify(public_key, []byte(sha1_hash), r, s)
-
-		return verifyStatus
+	public_key := readPublicKeyTypeCrypto()
+	signature_bytes, err := hex.DecodeString(signature)
+	if err != nil {
+		fmt.Println("err in helpers.verifySignatureTransact.signature_bytes")
+		fmt.Println(err)
+		os.Exit(1)
 	}
+
+	signature_final, err := crypto.SignatureFromBytes(signature_bytes)
+
+	data := map[string]string{
+		"func":        "transact",
+		"fromAddress": fromAddress,
+		"toAddress":   toAddress,
+		"numTokens":   numTokens,
+		"sequence":    sequence,
+	}
+
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	h := sha1.New()
+	h.Write(json_data)
+	sha1_hash := hex.EncodeToString(h.Sum(nil))
+	sha1_hash_bytes := []byte(sha1_hash)
+
+	verifyStatus := public_key.VerifyBytes(sha1_hash_bytes, signature_final)
+
+	return verifyStatus
 }
 
 func readPublicKey() *ecdsa.PublicKey {
@@ -216,4 +292,17 @@ func readPublicKey() *ecdsa.PublicKey {
 	genericPublicKey, _ := x509.ParsePKIXPublicKey(x509EncodedPub)
 	publicKey := genericPublicKey.(*ecdsa.PublicKey)
 	return publicKey
+}
+
+func readPublicKeyTypeCrypto() *crypto.PubKey {
+	//remove later
+	//used because ReadBinaryBytes doesn't accept public key in ecdsa.PublicKey format so crypto.PubKey needed to be used
+	pubKeyEncoded, _ := ioutil.ReadFile("/home/shubh/key.pub")
+	key := new(crypto.PubKey)
+	blockPub, _ := pem.Decode(pubKeyEncoded)
+
+	x509EncodedPub := blockPub.Bytes
+	key.UnmarshalJSON(x509EncodedPub)
+
+	return key
 }
