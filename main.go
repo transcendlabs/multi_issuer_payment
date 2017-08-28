@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/ror-shubham/fork_multi_issuer_payment/multi_issuer_payment/multi_issuer_payment"
+	"github.com/ror-shubham/multi_issuer_payment/multi_issuer_payment"
 	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/tmlibs/common"
@@ -23,7 +23,6 @@ func main() {
 	// Create the application - in memory or persisted to disk
 	var app types.Application
 	app = multi_issuer_payment.NewMultiIssuerPaymentApplication()
-	
 
 	// Start the listener
 	srv, err := server.NewServer(*addrPtr, *abciPtr, app)
