@@ -285,7 +285,7 @@ func verifySignatureTransact(fromAddress string, toAddress string, numTokens str
 }
 
 func readPublicKey() *ecdsa.PublicKey {
-	pubKeyEncoded, _ := ioutil.ReadFile("/home/shubh/key.pub")
+	pubKeyEncoded, _ := ioutil.ReadFile("key.pub")
 	//TODO catch IOerror here
 	blockPub, _ := pem.Decode(pubKeyEncoded)
 	x509EncodedPub := blockPub.Bytes
@@ -297,7 +297,8 @@ func readPublicKey() *ecdsa.PublicKey {
 func readPublicKeyTypeCrypto() *crypto.PubKey {
 	//remove later
 	//used because ReadBinaryBytes doesn't accept public key in ecdsa.PublicKey format so crypto.PubKey needed to be used
-	pubKeyEncoded, _ := ioutil.ReadFile("/home/shubh/key.pub")
+	pubKeyEncoded, _ := ioutil.ReadFile("key.pub")
+	//TODO catch io error here
 	key := new(crypto.PubKey)
 	blockPub, _ := pem.Decode(pubKeyEncoded)
 
