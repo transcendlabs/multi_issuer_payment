@@ -2,13 +2,12 @@ package main
 
 import (
 	"flag"
-	"os"
-
 	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 	"github.com/transcendlabs/multi_issuer_payment/multi_issuer_payment"
+	"os"
 )
 
 func main() {
