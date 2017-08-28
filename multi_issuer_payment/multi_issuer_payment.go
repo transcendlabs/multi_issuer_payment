@@ -23,6 +23,42 @@ func NewMultiIssuerPaymentApplication() *MultiIssuerPaymentApplication {
 	return &MultiIssuerPaymentApplication{userAccounts: userAccounts, processorAccounts: processorAccounts}
 }
 
+//query can be later changed to different queries where the input can be provided by reqQuery and different functions...
+// ...can be invoked based on that. But for now it just takes userAccount as query and returns balance in hex
+func (app *MultiIssuerPaymentApplication) Query(reqQuery types.RequestQuery) (resQuery types.ResponseQuery) {
+	if reqQuery.Prove {
+		userAccountBytes, proof, exists := app.userAccounts.Proof(reqQuery.Data)
+		resQuery.Index = -1 // TODO make Proof return index
+		resQuery.Key = reqQuery.Data
+
+		userAccount := &SmartCardUser{}
+		readBinaryBytes(userAccountBytes, userAccount)
+
+		resQuery.Value = []byte(string(userAccount.Balance))
+		resQuery.Proof = proof
+		if exists {
+			resQuery.Log = "exists"
+		} else {
+			resQuery.Log = "does not exist"
+		}
+		return
+	} else {
+		index, userAccountBytes, exists := app.userAccounts.Get(reqQuery.Data)
+		resQuery.Index = int64(index)
+
+		userAccount := &SmartCardUser{}
+		readBinaryBytes(userAccountBytes, userAccount)
+
+		resQuery.Value = []byte(string(userAccount.Balance))
+		if exists {
+			resQuery.Log = "exists"
+		} else {
+			resQuery.Log = "does not exist"
+		}
+		return
+	}
+}
+
 func (app *MultiIssuerPaymentApplication) CheckTx(tx []byte) types.Result {
 	parts := strings.Split(string(tx), ",")
 	if parts[0] == "issueTokens" {
