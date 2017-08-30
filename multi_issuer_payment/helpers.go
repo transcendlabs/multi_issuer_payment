@@ -2,10 +2,7 @@ package multi_issuer_payment
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/sha1"
-	"crypto/x509"
-	//"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -14,6 +11,7 @@ import (
 	wire "github.com/tendermint/go-wire"
 	"io/ioutil"
 	"os"
+	"os/user"
 	//"reflect"
 	"strconv"
 )
@@ -284,21 +282,11 @@ func verifySignatureTransact(fromAddress string, toAddress string, numTokens str
 	return verifyStatus
 }
 
-func readPublicKey() *ecdsa.PublicKey {
-	pubKeyEncoded, _ := ioutil.ReadFile("key.pub")
-	//TODO catch IOerror here
-	blockPub, _ := pem.Decode(pubKeyEncoded)
-	x509EncodedPub := blockPub.Bytes
-	genericPublicKey, _ := x509.ParsePKIXPublicKey(x509EncodedPub)
-	publicKey := genericPublicKey.(*ecdsa.PublicKey)
-	return publicKey
-}
-
 func readPublicKeyTypeCrypto() *crypto.PubKey {
 	//remove later
 	//used because ReadBinaryBytes doesn't accept public key in ecdsa.PublicKey format so crypto.PubKey needed to be used
-	pubKeyEncoded, _ := ioutil.ReadFile("key.pub")
-	//TODO catch io error here
+	usr, _ := user.Current()
+	pubKeyEncoded, _ := ioutil.ReadFile(usr.HomeDir + "/key.pub")
 	key := new(crypto.PubKey)
 	blockPub, _ := pem.Decode(pubKeyEncoded)
 
